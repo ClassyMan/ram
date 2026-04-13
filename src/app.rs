@@ -5,8 +5,8 @@ use crate::collector::{
 };
 use crate::ring_buffer::RingBuffer;
 
-const FAST_REFRESH_MS: u64 = 50;
-const FAST_SCROLLBACK_SECS: u64 = 2;
+const FAST_REFRESH_MS: u64 = 25;
+const FAST_SCROLLBACK_SECS: u64 = 3;
 
 pub struct App {
     pub alloc_history: RingBuffer,
