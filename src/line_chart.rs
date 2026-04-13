@@ -190,28 +190,18 @@ fn render_line(
         ((1.0 - normalized) * (height.saturating_sub(1)) as f64).round() as u16
     };
 
-    if data_len <= width {
-        // Right-align: each data point maps to exactly one column.
-        // No stretching → no sub-column jitter. Data scrolls exactly
-        // one column per tick.
-        let offset = width - data_len;
-        for (i, &(_, y)) in data.iter().enumerate() {
-            col_rows[offset + i] = Some(value_to_row(y));
-        }
+    // Always 1:1 mapping — one data point per column.
+    // When fewer points than columns: right-align, leave left empty.
+    // When more points than columns: show only the most recent `width` points.
+    // This gives exactly 1-column-per-tick scrolling with zero flicker.
+    let (data_slice, col_offset) = if data_len <= width {
+        (data, width - data_len)
     } else {
-        // Downsample: integer-division bins, max-aggregate each bin.
-        // Bin boundaries are deterministic for a given data_len/width.
-        for col in 0..width {
-            let bin_start = col * data_len / width;
-            let bin_end = ((col + 1) * data_len / width).min(data_len);
+        (&data[data_len - width..], 0)
+    };
 
-            let max_val = data[bin_start..bin_end]
-                .iter()
-                .map(|&(_, y)| y)
-                .fold(y_bounds[0], f64::max);
-
-            col_rows[col] = Some(value_to_row(max_val));
-        }
+    for (i, &(_, y)) in data_slice.iter().enumerate() {
+        col_rows[col_offset + i] = Some(value_to_row(y));
     }
 
     let style = Style::default().fg(dataset.color);
