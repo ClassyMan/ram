@@ -98,10 +98,10 @@ fn draw_throughput_chart(frame: &mut Frame, area: Rect, app: &App) {
     );
     let y_max = auto_scale_max(app.alloc_history.max().max(app.free_history.max()));
 
-    render_chart(frame, area, " Throughput ", vec![
-        line_chart::Dataset { data: &alloc_data, color: ALLOC_COLOR, name: alloc_label },
-        line_chart::Dataset { data: &free_data, color: FREE_COLOR, name: free_label },
-    ], app, y_max, |v| human_rate(v));
+    render_split_chart(frame, area, app, y_max, |v| human_rate(v),
+        " alloc ", line_chart::Dataset { data: &alloc_data, color: ALLOC_COLOR, name: alloc_label },
+        " free ",  line_chart::Dataset { data: &free_data, color: FREE_COLOR, name: free_label },
+    );
 }
 
 fn draw_swap_io_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -120,10 +120,10 @@ fn draw_swap_io_chart(frame: &mut Frame, area: Rect, app: &App) {
     );
     let y_max = auto_scale_max(app.swapin_history.max().max(app.swapout_history.max()));
 
-    render_chart(frame, area, " Swap I/O ", vec![
-        line_chart::Dataset { data: &swapin_data, color: SWAPIN_COLOR, name: swapin_label },
-        line_chart::Dataset { data: &swapout_data, color: SWAPOUT_COLOR, name: swapout_label },
-    ], app, y_max, |v| human_rate(v));
+    render_split_chart(frame, area, app, y_max, |v| human_rate(v),
+        " swap in ",  line_chart::Dataset { data: &swapin_data, color: SWAPIN_COLOR, name: swapin_label },
+        " swap out ", line_chart::Dataset { data: &swapout_data, color: SWAPOUT_COLOR, name: swapout_label },
+    );
 }
 
 fn draw_faults_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -142,10 +142,10 @@ fn draw_faults_chart(frame: &mut Frame, area: Rect, app: &App) {
     );
     let y_max = auto_scale_max(app.fault_history.max().max(app.major_fault_history.max()));
 
-    render_chart(frame, area, " Page Faults ", vec![
-        line_chart::Dataset { data: &fault_data, color: FAULT_COLOR, name: fault_label },
-        line_chart::Dataset { data: &major_data, color: MAJOR_FAULT_COLOR, name: major_label },
-    ], app, y_max, |v| human_count(v));
+    render_split_chart(frame, area, app, y_max, |v| human_count(v),
+        " minor ", line_chart::Dataset { data: &fault_data, color: FAULT_COLOR, name: fault_label },
+        " major ", line_chart::Dataset { data: &major_data, color: MAJOR_FAULT_COLOR, name: major_label },
+    );
 }
 
 fn draw_psi_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -164,39 +164,57 @@ fn draw_psi_chart(frame: &mut Frame, area: Rect, app: &App) {
     );
     let y_max = auto_scale_pct(app.psi_some_history.max().max(app.psi_full_history.max()));
 
-    render_chart(frame, area, " Memory Pressure (PSI) ", vec![
-        line_chart::Dataset { data: &some_data, color: PSI_SOME_COLOR, name: some_label },
-        line_chart::Dataset { data: &full_data, color: PSI_FULL_COLOR, name: full_label },
-    ], app, y_max, |v| format!("{:.0}%", v));
+    render_split_chart(frame, area, app, y_max, |v| format!("{:.0}%", v),
+        " some ", line_chart::Dataset { data: &some_data, color: PSI_SOME_COLOR, name: some_label },
+        " full ", line_chart::Dataset { data: &full_data, color: PSI_FULL_COLOR, name: full_label },
+    );
 }
 
-fn render_chart(
+fn render_split_chart(
     frame: &mut Frame,
     area: Rect,
-    title: &str,
-    datasets: Vec<line_chart::Dataset<'_>>,
     app: &App,
     y_max: f64,
     format_y: impl Fn(f64) -> String,
+    top_title: &str,
+    top_ds: line_chart::Dataset<'_>,
+    bottom_title: &str,
+    bottom_ds: line_chart::Dataset<'_>,
 ) {
     let capacity = app.chart_capacity() as f64;
+    let x_labels = [format!("{}s", app.scrollback_secs), "0s".to_string()];
+    let y_labels = ["0".to_string(), format_y(y_max)];
 
-    let chart = LineChart::new(datasets)
+    let [top_area, bottom_area] =
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .areas(area);
+
+    let top_chart = LineChart::new(vec![top_ds])
         .block(
             Block::default()
-                .title(title)
+                .title(top_title)
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER_COLOR)),
         )
         .x_bounds([0.0, capacity - 1.0])
         .y_bounds([0.0, y_max])
-        .x_labels([
-            format!("{}s", app.scrollback_secs),
-            "0s".to_string(),
-        ])
-        .y_labels(["0".to_string(), format_y(y_max)]);
+        .x_labels(x_labels.clone())
+        .y_labels(y_labels.clone());
 
-    frame.render_widget(chart, area);
+    let bottom_chart = LineChart::new(vec![bottom_ds])
+        .block(
+            Block::default()
+                .title(bottom_title)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(BORDER_COLOR)),
+        )
+        .x_bounds([0.0, capacity - 1.0])
+        .y_bounds([0.0, y_max])
+        .x_labels(x_labels)
+        .y_labels(y_labels);
+
+    frame.render_widget(top_chart, top_area);
+    frame.render_widget(bottom_chart, bottom_area);
 }
 
 fn draw_ram_gauge(frame: &mut Frame, area: Rect, app: &App) {
