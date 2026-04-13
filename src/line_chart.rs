@@ -185,27 +185,33 @@ fn render_line(
     let data_len = data.len();
     let mut col_rows: Vec<Option<u16>> = vec![None; width];
 
-    // Iterate columns, not data points.  Each column covers a fixed
-    // range of data indices and takes the max value in that bin.
-    // This keeps the mapping deterministic — only the rightmost
-    // column changes when a new sample arrives.
-    for col in 0..width {
-        let bin_start = (col as f64 / width as f64 * data_len as f64).floor() as usize;
-        let bin_end = (((col + 1) as f64 / width as f64 * data_len as f64).ceil() as usize)
-            .min(data_len);
+    let value_to_row = |y: f64| -> u16 {
+        let normalized = ((y - y_bounds[0]) / y_range).clamp(0.0, 1.0);
+        ((1.0 - normalized) * (height.saturating_sub(1)) as f64).round() as u16
+    };
 
-        if bin_start >= data_len {
-            continue;
+    if data_len <= width {
+        // Right-align: each data point maps to exactly one column.
+        // No stretching → no sub-column jitter. Data scrolls exactly
+        // one column per tick.
+        let offset = width - data_len;
+        for (i, &(_, y)) in data.iter().enumerate() {
+            col_rows[offset + i] = Some(value_to_row(y));
         }
+    } else {
+        // Downsample: integer-division bins, max-aggregate each bin.
+        // Bin boundaries are deterministic for a given data_len/width.
+        for col in 0..width {
+            let bin_start = col * data_len / width;
+            let bin_end = ((col + 1) * data_len / width).min(data_len);
 
-        let max_val = data[bin_start..bin_end]
-            .iter()
-            .map(|&(_, y)| y)
-            .fold(y_bounds[0], f64::max);
+            let max_val = data[bin_start..bin_end]
+                .iter()
+                .map(|&(_, y)| y)
+                .fold(y_bounds[0], f64::max);
 
-        let normalized = ((max_val - y_bounds[0]) / y_range).clamp(0.0, 1.0);
-        let row = ((1.0 - normalized) * (height.saturating_sub(1)) as f64).round() as u16;
-        col_rows[col] = Some(row);
+            col_rows[col] = Some(value_to_row(max_val));
+        }
     }
 
     let style = Style::default().fg(dataset.color);
