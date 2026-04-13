@@ -166,34 +166,46 @@ fn render_line(
     buf: &mut Buffer,
     area: Rect,
     dataset: &Dataset,
-    x_bounds: [f64; 2],
+    _x_bounds: [f64; 2],
     y_bounds: [f64; 2],
 ) {
-    if dataset.data.is_empty() || area.width == 0 || area.height == 0 {
+    let data = dataset.data;
+    if data.is_empty() || area.width == 0 || area.height == 0 {
         return;
     }
 
     let width = area.width as usize;
     let height = area.height as usize;
-    let x_range = x_bounds[1] - x_bounds[0];
     let y_range = y_bounds[1] - y_bounds[0];
 
-    if x_range <= 0.0 || y_range <= 0.0 {
+    if y_range <= 0.0 {
         return;
     }
 
-    // Map each data point to a column, keeping the last value per column.
+    let data_len = data.len();
     let mut col_rows: Vec<Option<u16>> = vec![None; width];
 
-    for &(x, y) in dataset.data {
-        let col = ((x - x_bounds[0]) / x_range * (width.saturating_sub(1)) as f64).round()
-            as isize;
-        if col < 0 || col >= width as isize {
+    // Iterate columns, not data points.  Each column covers a fixed
+    // range of data indices and takes the max value in that bin.
+    // This keeps the mapping deterministic — only the rightmost
+    // column changes when a new sample arrives.
+    for col in 0..width {
+        let bin_start = (col as f64 / width as f64 * data_len as f64).floor() as usize;
+        let bin_end = (((col + 1) as f64 / width as f64 * data_len as f64).ceil() as usize)
+            .min(data_len);
+
+        if bin_start >= data_len {
             continue;
         }
-        let normalized = ((y - y_bounds[0]) / y_range).clamp(0.0, 1.0);
+
+        let max_val = data[bin_start..bin_end]
+            .iter()
+            .map(|&(_, y)| y)
+            .fold(y_bounds[0], f64::max);
+
+        let normalized = ((max_val - y_bounds[0]) / y_range).clamp(0.0, 1.0);
         let row = ((1.0 - normalized) * (height.saturating_sub(1)) as f64).round() as u16;
-        col_rows[col as usize] = Some(row);
+        col_rows[col] = Some(row);
     }
 
     let style = Style::default().fg(dataset.color);
