@@ -1,5 +1,6 @@
 mod app;
 mod collector;
+mod line_chart;
 mod ring_buffer;
 mod ui;
 

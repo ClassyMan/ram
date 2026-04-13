@@ -1,23 +1,21 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::symbols::Marker;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Axis, Block, Borders, Chart, Dataset, Gauge, GraphType, Paragraph,
-};
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
 
 use crate::app::App;
 use crate::collector::{human_count, human_rate};
+use crate::line_chart::{self, LineChart};
 
-const ALLOC_COLOR: Color = Color::Rgb(255, 220, 150);   // warm yellow
-const FREE_COLOR: Color = Color::Rgb(180, 120, 255);    // purple
-const SWAPIN_COLOR: Color = Color::Rgb(100, 200, 255);  // light blue
-const SWAPOUT_COLOR: Color = Color::Rgb(255, 130, 130); // coral
-const FAULT_COLOR: Color = Color::Rgb(150, 255, 150);   // green
-const MAJOR_FAULT_COLOR: Color = Color::Rgb(255, 100, 100); // red
-const PSI_SOME_COLOR: Color = Color::Rgb(255, 200, 100);  // orange
-const PSI_FULL_COLOR: Color = Color::Rgb(255, 80, 80);    // bright red
+const ALLOC_COLOR: Color = Color::Rgb(255, 220, 150);
+const FREE_COLOR: Color = Color::Rgb(180, 120, 255);
+const SWAPIN_COLOR: Color = Color::Rgb(100, 200, 255);
+const SWAPOUT_COLOR: Color = Color::Rgb(255, 130, 130);
+const FAULT_COLOR: Color = Color::Rgb(150, 255, 150);
+const MAJOR_FAULT_COLOR: Color = Color::Rgb(255, 100, 100);
+const PSI_SOME_COLOR: Color = Color::Rgb(255, 200, 100);
+const PSI_FULL_COLOR: Color = Color::Rgb(255, 80, 80);
 const BORDER_COLOR: Color = Color::DarkGray;
 const LABEL_COLOR: Color = Color::Gray;
 
@@ -25,8 +23,8 @@ pub fn render(frame: &mut Frame, app: &App) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),     // hardware header
-            Constraint::Min(0),        // everything else
+            Constraint::Length(1),
+            Constraint::Min(0),
         ])
         .split(frame.area());
 
@@ -35,10 +33,10 @@ pub fn render(frame: &mut Frame, app: &App) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(25), // RAM row
-            Constraint::Percentage(25), // Swap row
-            Constraint::Percentage(25), // Faults row
-            Constraint::Percentage(25), // PSI row
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
         ])
         .split(outer[1]);
 
@@ -51,28 +49,17 @@ pub fn render(frame: &mut Frame, app: &App) {
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     let text = Paragraph::new(Line::from(vec![
         Span::styled(" RAM ", Style::default().fg(ALLOC_COLOR).add_modifier(Modifier::BOLD)),
-        Span::styled(
-            &app.hardware.summary,
-            Style::default().fg(LABEL_COLOR),
-        ),
+        Span::styled(&app.hardware.summary, Style::default().fg(LABEL_COLOR)),
     ]));
     frame.render_widget(text, area);
 }
 
-enum RowKind {
-    Ram,
-    Swap,
-    Faults,
-    Psi,
-}
+enum RowKind { Ram, Swap, Faults, Psi }
 
 fn draw_row(frame: &mut Frame, area: Rect, app: &App, kind: RowKind) {
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(30),       // chart (takes remaining space)
-            Constraint::Length(30),     // gauge sidebar
-        ])
+        .constraints([Constraint::Min(30), Constraint::Length(30)])
         .split(area);
 
     match kind {
@@ -103,22 +90,18 @@ fn draw_throughput_chart(frame: &mut Frame, area: Rect, app: &App) {
 
     let alloc_label = app.latest_rates.as_ref().map_or_else(
         || "alloc: --".to_string(),
-        |rates| format!("alloc: {}", human_rate(rates.alloc_mb_per_sec)),
+        |r| format!("alloc: {}", human_rate(r.alloc_mb_per_sec)),
     );
     let free_label = app.latest_rates.as_ref().map_or_else(
         || "free: --".to_string(),
-        |rates| format!("free:  {}", human_rate(rates.free_mb_per_sec)),
+        |r| format!("free:  {}", human_rate(r.free_mb_per_sec)),
     );
-
     let y_max = auto_scale_max(app.alloc_history.max().max(app.free_history.max()));
 
-    let datasets = vec![
-        make_dataset(&alloc_label, ALLOC_COLOR, &alloc_data),
-        make_dataset(&free_label, FREE_COLOR, &free_data),
-    ];
-
-    render_chart(frame, area, " Throughput ", "MB/s", datasets, app, y_max,
-        |v| human_rate(v));
+    render_chart(frame, area, " Throughput ", vec![
+        line_chart::Dataset { data: &alloc_data, color: ALLOC_COLOR, name: alloc_label },
+        line_chart::Dataset { data: &free_data, color: FREE_COLOR, name: free_label },
+    ], app, y_max, |v| human_rate(v));
 }
 
 fn draw_swap_io_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -129,22 +112,18 @@ fn draw_swap_io_chart(frame: &mut Frame, area: Rect, app: &App) {
 
     let swapin_label = app.latest_rates.as_ref().map_or_else(
         || "in: --".to_string(),
-        |rates| format!("in:  {}", human_rate(rates.swapin_mb_per_sec)),
+        |r| format!("in:  {}", human_rate(r.swapin_mb_per_sec)),
     );
     let swapout_label = app.latest_rates.as_ref().map_or_else(
         || "out: --".to_string(),
-        |rates| format!("out: {}", human_rate(rates.swapout_mb_per_sec)),
+        |r| format!("out: {}", human_rate(r.swapout_mb_per_sec)),
     );
-
     let y_max = auto_scale_max(app.swapin_history.max().max(app.swapout_history.max()));
 
-    let datasets = vec![
-        make_dataset(&swapin_label, SWAPIN_COLOR, &swapin_data),
-        make_dataset(&swapout_label, SWAPOUT_COLOR, &swapout_data),
-    ];
-
-    render_chart(frame, area, " Swap I/O ", "MB/s", datasets, app, y_max,
-        |v| human_rate(v));
+    render_chart(frame, area, " Swap I/O ", vec![
+        line_chart::Dataset { data: &swapin_data, color: SWAPIN_COLOR, name: swapin_label },
+        line_chart::Dataset { data: &swapout_data, color: SWAPOUT_COLOR, name: swapout_label },
+    ], app, y_max, |v| human_rate(v));
 }
 
 fn draw_faults_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -155,22 +134,18 @@ fn draw_faults_chart(frame: &mut Frame, area: Rect, app: &App) {
 
     let fault_label = app.latest_rates.as_ref().map_or_else(
         || "minor: --".to_string(),
-        |rates| format!("minor: {}", human_count(rates.fault_per_sec)),
+        |r| format!("minor: {}", human_count(r.fault_per_sec)),
     );
     let major_label = app.latest_rates.as_ref().map_or_else(
         || "major: --".to_string(),
-        |rates| format!("major: {}", human_count(rates.major_fault_per_sec)),
+        |r| format!("major: {}", human_count(r.major_fault_per_sec)),
     );
-
     let y_max = auto_scale_max(app.fault_history.max().max(app.major_fault_history.max()));
 
-    let datasets = vec![
-        make_dataset(&fault_label, FAULT_COLOR, &fault_data),
-        make_dataset(&major_label, MAJOR_FAULT_COLOR, &major_data),
-    ];
-
-    render_chart(frame, area, " Page Faults ", "/s", datasets, app, y_max,
-        |v| human_count(v));
+    render_chart(frame, area, " Page Faults ", vec![
+        line_chart::Dataset { data: &fault_data, color: FAULT_COLOR, name: fault_label },
+        line_chart::Dataset { data: &major_data, color: MAJOR_FAULT_COLOR, name: major_label },
+    ], app, y_max, |v| human_count(v));
 }
 
 fn draw_psi_chart(frame: &mut Frame, area: Rect, app: &App) {
@@ -181,22 +156,47 @@ fn draw_psi_chart(frame: &mut Frame, area: Rect, app: &App) {
 
     let some_label = app.latest_psi.as_ref().map_or_else(
         || "some: --".to_string(),
-        |psi| psi.some_label(),
+        |p| p.some_label(),
     );
     let full_label = app.latest_psi.as_ref().map_or_else(
         || "full: --".to_string(),
-        |psi| psi.full_label(),
+        |p| p.full_label(),
     );
-
     let y_max = auto_scale_pct(app.psi_some_history.max().max(app.psi_full_history.max()));
 
-    let datasets = vec![
-        make_dataset(&some_label, PSI_SOME_COLOR, &some_data),
-        make_dataset(&full_label, PSI_FULL_COLOR, &full_data),
-    ];
+    render_chart(frame, area, " Memory Pressure (PSI) ", vec![
+        line_chart::Dataset { data: &some_data, color: PSI_SOME_COLOR, name: some_label },
+        line_chart::Dataset { data: &full_data, color: PSI_FULL_COLOR, name: full_label },
+    ], app, y_max, |v| format!("{:.0}%", v));
+}
 
-    render_chart(frame, area, " Memory Pressure (PSI) ", "%", datasets, app, y_max,
-        |v| format!("{:.0}%", v));
+fn render_chart(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    datasets: Vec<line_chart::Dataset<'_>>,
+    app: &App,
+    y_max: f64,
+    format_y: impl Fn(f64) -> String,
+) {
+    let capacity = app.chart_capacity() as f64;
+
+    let chart = LineChart::new(datasets)
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(BORDER_COLOR)),
+        )
+        .x_bounds([0.0, capacity - 1.0])
+        .y_bounds([0.0, y_max])
+        .x_labels([
+            format!("{}s", app.scrollback_secs),
+            "0s".to_string(),
+        ])
+        .y_labels(["0".to_string(), format_y(y_max)]);
+
+    frame.render_widget(chart, area);
 }
 
 fn draw_ram_gauge(frame: &mut Frame, area: Rect, app: &App) {
@@ -220,8 +220,8 @@ fn draw_dirty_gauge(frame: &mut Frame, area: Rect, app: &App) {
         || "Dirty+WB: --".to_string(),
         |info| info.dirty_label(),
     );
-    let dirty_kb = app.latest_info.as_ref().map_or(0, |info| info.dirty_writeback_kb());
-    let ram_total = app.latest_info.as_ref().map_or(1, |info| info.ram_total_kb.max(1));
+    let dirty_kb = app.latest_info.as_ref().map_or(0, |i| i.dirty_writeback_kb());
+    let ram_total = app.latest_info.as_ref().map_or(1, |i| i.ram_total_kb.max(1));
     let pct = (dirty_kb as f64 / ram_total as f64) * 100.0;
     draw_gauge(frame, area, &label, pct, FAULT_COLOR);
 }
@@ -232,13 +232,9 @@ fn draw_psi_gauge(frame: &mut Frame, area: Rect, app: &App) {
         |psi| psi.summary_label(),
     );
     let pct = app.latest_psi.as_ref().map_or(0.0, |psi| psi.severity_pct());
-    let color = if pct >= 10.0 {
-        PSI_FULL_COLOR
-    } else if pct >= 1.0 {
-        PSI_SOME_COLOR
-    } else {
-        Color::Green
-    };
+    let color = if pct >= 10.0 { PSI_FULL_COLOR }
+        else if pct >= 1.0 { PSI_SOME_COLOR }
+        else { Color::Green };
     draw_gauge(frame, area, &label, pct, color);
 }
 
@@ -257,63 +253,6 @@ fn draw_gauge(frame: &mut Frame, area: Rect, label: &str, pct: f64, color: Color
         .ratio(pct.clamp(0.0, 100.0) / 100.0);
 
     frame.render_widget(gauge, area);
-}
-
-fn make_dataset<'a>(label: &str, color: Color, data: &'a [(f64, f64)]) -> Dataset<'a> {
-    Dataset::default()
-        .name(Line::from(Span::styled(
-            label.to_string(),
-            Style::default().fg(color),
-        )))
-        .marker(Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(Style::default().fg(color))
-        .data(data)
-}
-
-fn render_chart<F>(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    y_title: &str,
-    datasets: Vec<Dataset<'_>>,
-    app: &App,
-    y_max: f64,
-    format_y: F,
-) where
-    F: Fn(f64) -> String,
-{
-    let capacity = app.chart_capacity() as f64;
-
-    let x_axis = Axis::default()
-        .title(Span::styled("Time", Style::default().fg(LABEL_COLOR)))
-        .style(Style::default().fg(BORDER_COLOR))
-        .bounds([0.0, capacity - 1.0])
-        .labels(vec![
-            format!("{}s", app.scrollback_secs).bold(),
-            "0s".to_string().bold(),
-        ]);
-
-    let y_axis = Axis::default()
-        .title(Span::styled(y_title, Style::default().fg(LABEL_COLOR)))
-        .style(Style::default().fg(BORDER_COLOR))
-        .bounds([0.0, y_max])
-        .labels(vec![
-            "0".to_string().bold(),
-            format_y(y_max).bold(),
-        ]);
-
-    let chart = Chart::new(datasets)
-        .block(
-            Block::default()
-                .title(title)
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(BORDER_COLOR)),
-        )
-        .x_axis(x_axis)
-        .y_axis(y_axis);
-
-    frame.render_widget(chart, area);
 }
 
 fn auto_scale_max(observed_max: f64) -> f64 {
