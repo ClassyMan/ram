@@ -176,23 +176,23 @@ fn render_split_chart(
     app: &App,
     y_max: f64,
     format_y: impl Fn(f64) -> String,
-    top_title: &str,
-    top_ds: line_chart::Dataset<'_>,
-    bottom_title: &str,
-    bottom_ds: line_chart::Dataset<'_>,
+    left_title: &str,
+    left_ds: line_chart::Dataset<'_>,
+    right_title: &str,
+    right_ds: line_chart::Dataset<'_>,
 ) {
     let capacity = app.chart_capacity() as f64;
     let x_labels = [format!("{}s", app.scrollback_secs), "0s".to_string()];
     let y_labels = ["0".to_string(), format_y(y_max)];
 
-    let [top_area, bottom_area] =
-        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+    let [left_area, right_area] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
             .areas(area);
 
-    let top_chart = LineChart::new(vec![top_ds])
+    let left_chart = LineChart::new(vec![left_ds])
         .block(
             Block::default()
-                .title(top_title)
+                .title(left_title)
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER_COLOR)),
         )
@@ -201,10 +201,10 @@ fn render_split_chart(
         .x_labels(x_labels.clone())
         .y_labels(y_labels.clone());
 
-    let bottom_chart = LineChart::new(vec![bottom_ds])
+    let right_chart = LineChart::new(vec![right_ds])
         .block(
             Block::default()
-                .title(bottom_title)
+                .title(right_title)
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER_COLOR)),
         )
@@ -213,8 +213,8 @@ fn render_split_chart(
         .x_labels(x_labels)
         .y_labels(y_labels);
 
-    frame.render_widget(top_chart, top_area);
-    frame.render_widget(bottom_chart, bottom_area);
+    frame.render_widget(left_chart, left_area);
+    frame.render_widget(right_chart, right_area);
 }
 
 fn draw_ram_gauge(frame: &mut Frame, area: Rect, app: &App) {
