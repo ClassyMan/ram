@@ -106,7 +106,7 @@ fn draw_throughput_chart(frame: &mut Frame, area: Rect, app: &App) {
         || "free: --".to_string(),
         |r| format!("free:  {}", human_rate(r.free_mb_per_sec)),
     );
-    let y_max = auto_scale_max(app.alloc_history.max().max(app.free_history.max()));
+    let y_max = auto_scale_max(app.throughput_y.current());
 
     render_split_chart(frame, area, app, y_max, |v| human_rate(v),
         " alloc ", line_chart::Dataset { data: &alloc_data, color: ALLOC_COLOR, name: alloc_label },
@@ -128,7 +128,7 @@ fn draw_swap_io_chart(frame: &mut Frame, area: Rect, app: &App) {
         || "out: --".to_string(),
         |r| format!("out: {}", human_rate(r.swapout_mb_per_sec)),
     );
-    let y_max = auto_scale_max(app.swapin_history.max().max(app.swapout_history.max()));
+    let y_max = auto_scale_max(app.swap_io_y.current());
 
     render_split_chart(frame, area, app, y_max, |v| human_rate(v),
         " swap in ",  line_chart::Dataset { data: &swapin_data, color: SWAPIN_COLOR, name: swapin_label },
@@ -150,7 +150,7 @@ fn draw_faults_chart(frame: &mut Frame, area: Rect, app: &App) {
         || "major: --".to_string(),
         |r| format!("major: {}", human_count(r.major_fault_per_sec)),
     );
-    let y_max = auto_scale_max(app.fault_history.max().max(app.major_fault_history.max()));
+    let y_max = auto_scale_max(app.faults_y.current());
 
     render_split_chart(frame, area, app, y_max, |v| human_count(v),
         " minor ", line_chart::Dataset { data: &fault_data, color: FAULT_COLOR, name: fault_label },
@@ -172,7 +172,7 @@ fn draw_psi_chart(frame: &mut Frame, area: Rect, app: &App) {
         || "full: --".to_string(),
         |p| p.full_label(),
     );
-    let y_max = auto_scale_pct(app.psi_some_history.max().max(app.psi_full_history.max()));
+    let y_max = auto_scale_pct(app.psi_y.current());
 
     render_split_chart(frame, area, app, y_max, |v| format!("{:.0}%", v),
         " some ", line_chart::Dataset { data: &some_data, color: PSI_SOME_COLOR, name: some_label },

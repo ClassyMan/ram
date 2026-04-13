@@ -4,6 +4,7 @@ use crate::collector::{
     self, HardwareInfo, MemInfo, PsiSnapshot, VmRates, VmStatSnapshot,
 };
 use crate::ring_buffer::RingBuffer;
+use crate::sticky_max::StickyMax;
 
 const FAST_REFRESH_MS: u64 = 25;
 const FAST_SCROLLBACK_SECS: u64 = 3;
@@ -26,6 +27,12 @@ pub struct App {
     pub scrollback_secs: u64,
     pub fast_mode: bool,
     pub refresh_ms: u64,
+
+    pub throughput_y: StickyMax,
+    pub swap_io_y: StickyMax,
+    pub faults_y: StickyMax,
+    pub psi_y: StickyMax,
+
     normal_refresh_ms: u64,
     normal_scrollback_secs: u64,
     prev_vmstat: Option<VmStatSnapshot>,
@@ -52,6 +59,10 @@ impl App {
             scrollback_secs,
             fast_mode: false,
             refresh_ms,
+            throughput_y: StickyMax::new(),
+            swap_io_y: StickyMax::new(),
+            faults_y: StickyMax::new(),
+            psi_y: StickyMax::new(),
             normal_refresh_ms: refresh_ms,
             normal_scrollback_secs: scrollback_secs,
             prev_vmstat: None,
@@ -83,6 +94,12 @@ impl App {
         self.major_fault_history = RingBuffer::new(capacity);
         self.psi_some_history = RingBuffer::new(capacity);
         self.psi_full_history = RingBuffer::new(capacity);
+
+        self.throughput_y.reset();
+        self.swap_io_y.reset();
+        self.faults_y.reset();
+        self.psi_y.reset();
+
         self.prev_vmstat = None;
         self.latest_rates = None;
     }
@@ -107,12 +124,25 @@ impl App {
             self.fault_history.push(rates.fault_per_sec);
             self.major_fault_history.push(rates.major_fault_per_sec);
 
+            self.throughput_y.update(
+                self.alloc_history.max().max(self.free_history.max()),
+            );
+            self.swap_io_y.update(
+                self.swapin_history.max().max(self.swapout_history.max()),
+            );
+            self.faults_y.update(
+                self.fault_history.max().max(self.major_fault_history.max()),
+            );
+
             self.latest_rates = Some(rates);
         }
 
         if let Some(psi_snap) = &psi {
             self.psi_some_history.push(psi_snap.some_avg10);
             self.psi_full_history.push(psi_snap.full_avg10);
+            self.psi_y.update(
+                self.psi_some_history.max().max(self.psi_full_history.max()),
+            );
         }
 
         self.prev_vmstat = Some(vmstat);
