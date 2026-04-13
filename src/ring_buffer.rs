@@ -42,6 +42,13 @@ impl RingBuffer {
         Some(self.buf[index])
     }
 
+    pub fn max(&self) -> f64 {
+        if self.len == 0 {
+            return 0.0;
+        }
+        self.iter().fold(0.0_f64, f64::max)
+    }
+
     /// Produces (x, y) pairs for ratatui Chart data.
     pub fn as_chart_data(&self, out: &mut Vec<(f64, f64)>) {
         out.clear();
