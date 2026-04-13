@@ -5,17 +5,16 @@ use crate::collector::{
 };
 use crate::ring_buffer::RingBuffer;
 
+const FAST_REFRESH_MS: u64 = 50;
+const FAST_SCROLLBACK_SECS: u64 = 2;
+
 pub struct App {
-    // RAM row
     pub alloc_history: RingBuffer,
     pub free_history: RingBuffer,
-    // Swap row
     pub swapin_history: RingBuffer,
     pub swapout_history: RingBuffer,
-    // Page faults row
     pub fault_history: RingBuffer,
     pub major_fault_history: RingBuffer,
-    // PSI row
     pub psi_some_history: RingBuffer,
     pub psi_full_history: RingBuffer,
 
@@ -25,7 +24,10 @@ pub struct App {
     pub hardware: HardwareInfo,
     pub should_quit: bool,
     pub scrollback_secs: u64,
-    refresh_ms: u64,
+    pub fast_mode: bool,
+    pub refresh_ms: u64,
+    normal_refresh_ms: u64,
+    normal_scrollback_secs: u64,
     prev_vmstat: Option<VmStatSnapshot>,
 }
 
@@ -48,13 +50,45 @@ impl App {
             hardware,
             should_quit: false,
             scrollback_secs,
+            fast_mode: false,
             refresh_ms,
+            normal_refresh_ms: refresh_ms,
+            normal_scrollback_secs: scrollback_secs,
             prev_vmstat: None,
         }
     }
 
     pub fn chart_capacity(&self) -> usize {
         self.alloc_history.capacity()
+    }
+
+    pub fn toggle_fast_mode(&mut self) {
+        self.fast_mode = !self.fast_mode;
+
+        let (new_refresh, new_scrollback) = if self.fast_mode {
+            (FAST_REFRESH_MS, FAST_SCROLLBACK_SECS)
+        } else {
+            (self.normal_refresh_ms, self.normal_scrollback_secs)
+        };
+
+        self.refresh_ms = new_refresh;
+        self.scrollback_secs = new_scrollback;
+
+        let capacity = ((new_scrollback * 1000) / new_refresh) as usize;
+        self.alloc_history = RingBuffer::new(capacity);
+        self.free_history = RingBuffer::new(capacity);
+        self.swapin_history = RingBuffer::new(capacity);
+        self.swapout_history = RingBuffer::new(capacity);
+        self.fault_history = RingBuffer::new(capacity);
+        self.major_fault_history = RingBuffer::new(capacity);
+        self.psi_some_history = RingBuffer::new(capacity);
+        self.psi_full_history = RingBuffer::new(capacity);
+        self.prev_vmstat = None;
+        self.latest_rates = None;
+    }
+
+    pub fn refresh_rate(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.refresh_ms)
     }
 
     pub fn tick(&mut self) -> Result<()> {

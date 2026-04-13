@@ -47,9 +47,19 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
+    let mode_span = if app.fast_mode {
+        Span::styled(" FAST ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD))
+    } else {
+        Span::raw("")
+    };
+
     let text = Paragraph::new(Line::from(vec![
         Span::styled(" RAM ", Style::default().fg(ALLOC_COLOR).add_modifier(Modifier::BOLD)),
-        Span::styled(&app.hardware.summary, Style::default().fg(LABEL_COLOR)),
+        mode_span,
+        Span::styled(
+            format!(" {} | {}ms | {}s ", app.hardware.summary, app.refresh_ms, app.scrollback_secs),
+            Style::default().fg(LABEL_COLOR),
+        ),
     ]));
     frame.render_widget(text, area);
 }

@@ -6,7 +6,7 @@ mod ui;
 
 use std::io;
 use std::panic;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::Result;
 use clap::Parser;
@@ -68,7 +68,6 @@ fn main() -> Result<()> {
 }
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: Cli) -> Result<()> {
-    let refresh_rate = Duration::from_millis(cli.refresh);
     let mut app = App::new(cli.refresh, cli.scrollback);
 
     app.tick()?;
@@ -78,7 +77,8 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: Cli) -> Resul
     loop {
         terminal.draw(|frame| ui::render(frame, &app))?;
 
-        let timeout = refresh_rate
+        let timeout = app
+            .refresh_rate()
             .checked_sub(last_tick.elapsed())
             .unwrap_or_default();
 
@@ -86,11 +86,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: Cli) -> Resul
             if let Event::Key(key) = event::read()? {
                 if should_quit(key) {
                     app.should_quit = true;
+                } else if key.code == KeyCode::Char('f') {
+                    app.toggle_fast_mode();
+                    last_tick = Instant::now();
                 }
             }
         }
 
-        if last_tick.elapsed() >= refresh_rate {
+        if last_tick.elapsed() >= app.refresh_rate() {
             app.tick()?;
             last_tick = Instant::now();
         }
