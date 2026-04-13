@@ -265,7 +265,7 @@ fn make_dataset<'a>(label: &str, color: Color, data: &'a [(f64, f64)]) -> Datase
             label.to_string(),
             Style::default().fg(color),
         )))
-        .marker(Marker::Braille)
+        .marker(Marker::HalfBlock)
         .graph_type(GraphType::Line)
         .style(Style::default().fg(color))
         .data(data)
