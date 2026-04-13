@@ -33,7 +33,7 @@ pub struct App {
 
 impl App {
     pub fn new(refresh_ms: u64, scrollback_secs: u64) -> Self {
-        let capacity = ((scrollback_secs * 1000) / refresh_ms) as usize;
+        let capacity = min_capacity(refresh_ms, scrollback_secs);
         let hardware = collector::read_hardware_info();
         Self {
             alloc_history: RingBuffer::new(capacity),
@@ -74,7 +74,7 @@ impl App {
         self.refresh_ms = new_refresh;
         self.scrollback_secs = new_scrollback;
 
-        let capacity = ((new_scrollback * 1000) / new_refresh) as usize;
+        let capacity = min_capacity(new_refresh, new_scrollback);
         self.alloc_history = RingBuffer::new(capacity);
         self.free_history = RingBuffer::new(capacity);
         self.swapin_history = RingBuffer::new(capacity);
@@ -120,4 +120,12 @@ impl App {
         self.latest_info = Some(info);
         Ok(())
     }
+}
+
+fn min_capacity(refresh_ms: u64, scrollback_secs: u64) -> usize {
+    let time_based = ((scrollback_secs * 1000) / refresh_ms) as usize;
+    let term_width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(200);
+    time_based.max(term_width)
 }
