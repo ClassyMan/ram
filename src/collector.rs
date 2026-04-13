@@ -132,10 +132,14 @@ pub struct HardwareInfo {
 }
 
 fn cache_path() -> std::path::PathBuf {
-    let cache_dir = dirs::cache_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join("ram");
-    cache_dir.join("hardware.txt")
+    let base = match std::env::var("SUDO_USER") {
+        Ok(user) if !user.is_empty() => {
+            std::path::PathBuf::from(format!("/home/{}/.cache", user))
+        }
+        _ => dirs::cache_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp")),
+    };
+    base.join("ram").join("hardware.txt")
 }
 
 pub fn refresh_hardware_cache() -> Result<()> {
