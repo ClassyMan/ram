@@ -131,43 +131,106 @@ pub struct HardwareInfo {
     pub summary: String,
 }
 
+fn cache_path() -> std::path::PathBuf {
+    let cache_dir = dirs::cache_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+        .join("ram");
+    cache_dir.join("hardware.txt")
+}
+
+pub fn refresh_hardware_cache() -> Result<()> {
+    let dimms = read_dmidecode_dimms();
+    if dimms.is_empty() {
+        anyhow::bail!(
+            "dmidecode returned no DIMM data. Are you running with sudo?"
+        );
+    }
+
+    let cache = cache_path();
+    if let Some(parent) = cache.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let lines: Vec<String> = dimms
+        .iter()
+        .map(|d| format!("{}\t{}\t{}\t{}", d.size, d.memory_type, d.speed, d.manufacturer))
+        .collect();
+    fs::write(&cache, lines.join("\n"))?;
+
+    eprintln!("Cached {} DIMM(s) to {}", dimms.len(), cache.display());
+    Ok(())
+}
+
 pub fn read_hardware_info() -> HardwareInfo {
     let total_gib = read_meminfo()
         .map(|info| info.ram_total_kb as f64 / (1024.0 * 1024.0))
         .unwrap_or(0.0);
 
-    let dimms = read_dmidecode_dimms();
+    let dimms = read_cached_dimms()
+        .or_else(|| {
+            let live = read_dmidecode_dimms();
+            if !live.is_empty() { Some(live) } else { None }
+        });
 
-    let summary = if dimms.is_empty() {
-        let board = fs::read_to_string("/sys/devices/virtual/dmi/id/board_name")
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        let vendor = fs::read_to_string("/sys/devices/virtual/dmi/id/board_vendor")
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        let board_str = if board.is_empty() {
-            "Unknown board".to_string()
-        } else {
-            format!("{} {}", vendor, board)
-        };
-        format!("{:.0} GiB | {} | (run with sudo for DIMM details)", total_gib, board_str)
-    } else {
-        let dimm_count = dimms.len();
-        let first = &dimms[0];
-        format!(
-            "{:.0} GiB | {}x {} {} {} @ {} MT/s",
-            total_gib,
-            dimm_count,
-            first.size,
-            first.memory_type,
-            first.manufacturer,
-            first.speed,
-        )
+    let summary = match dimms {
+        Some(ref dimms) if !dimms.is_empty() => {
+            let dimm_count = dimms.len();
+            let first = &dimms[0];
+            format!(
+                "{:.0} GiB | {}x {} {} {} @ {} MT/s",
+                total_gib,
+                dimm_count,
+                first.size,
+                first.memory_type,
+                first.manufacturer,
+                first.speed,
+            )
+        }
+        _ => {
+            let board = fs::read_to_string("/sys/devices/virtual/dmi/id/board_name")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let vendor = fs::read_to_string("/sys/devices/virtual/dmi/id/board_vendor")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let board_str = if board.is_empty() {
+                "Unknown board".to_string()
+            } else {
+                format!("{} {}", vendor, board)
+            };
+            format!(
+                "{:.0} GiB | {} | (run: sudo ram --refresh-hardware)",
+                total_gib, board_str
+            )
+        }
     };
 
     HardwareInfo { summary }
+}
+
+fn read_cached_dimms() -> Option<Vec<DimmInfo>> {
+    let content = fs::read_to_string(cache_path()).ok()?;
+    let dimms: Vec<DimmInfo> = content
+        .lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 4 {
+                Some(DimmInfo {
+                    size: parts[0].to_string(),
+                    memory_type: parts[1].to_string(),
+                    speed: parts[2].to_string(),
+                    manufacturer: parts[3].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if dimms.is_empty() { None } else { Some(dimms) }
 }
 
 struct DimmInfo {

@@ -31,10 +31,18 @@ struct Cli {
     /// Scrollback duration in seconds
     #[arg(short = 's', long, default_value = "60")]
     scrollback: u64,
+
+    /// Re-read DIMM info via dmidecode and cache it (requires sudo)
+    #[arg(long)]
+    refresh_hardware: bool,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if cli.refresh_hardware {
+        return collector::refresh_hardware_cache();
+    }
 
     terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
